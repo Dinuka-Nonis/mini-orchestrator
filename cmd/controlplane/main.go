@@ -1,24 +1,32 @@
 package main
 
 import (
-    "context"
-    "net/http"
-    "os"
-    "os/signal"
-    "github.com/Dinuka-Nonis/mini-orchestrator/internal/store"
-    "github.com/Dinuka-Nonis/mini-orchestrator/internal/api"
+	"context"
+	"log"
+	"net/http"
+	"os"
+	"os/signal"
+
+	"github.com/Dinuka-Nonis/mini-orchestrator/internal/api"
+	"github.com/Dinuka-Nonis/mini-orchestrator/internal/scheduler"
+	"github.com/Dinuka-Nonis/mini-orchestrator/internal/store"
 )
 
 func main() {
-    db := store.New("./state.db")
-    router := api.New(db)
+	db := store.New("./state.db")
+	sched := scheduler.New(db)
+	router := api.New(db)
 
-    srv := &http.Server{Addr: ":8080", Handler: router}
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer cancel()
 
-    ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
-    defer cancel()
+	go sched.Run(ctx)
+	log.Println("[controlplane] scheduler started")
 
-    go srv.ListenAndServe()
-    <-ctx.Done()
-    srv.Shutdown(context.Background())
+	srv := &http.Server{Addr: ":8080", Handler: router}
+	go srv.ListenAndServe()
+	log.Println("[controlplane] api listening on :8080")
+
+	<-ctx.Done()
+	srv.Shutdown(context.Background())
 }

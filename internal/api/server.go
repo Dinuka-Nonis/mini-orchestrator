@@ -72,12 +72,12 @@ func New(s *store.Store) *gin.Engine {
 			ContainerID string          `json:"container_id"`
 		}
 		c.BindJSON(&body)
-		s.UpdatePodStatus(c.Param("id"), body.Status)
-		if body.ContainerID != "" {
-			s.UpdatePodContainerID(c.Param("id"), body.ContainerID)
+		if body.Status == types.PodRunning && body.ContainerID != "" {
+			s.UpdatePodRunning(c.Param("id"), body.ContainerID)
+		} else {
+			s.UpdatePodStatus(c.Param("id"), body.Status)
 		}
 		c.JSON(200, gin.H{"ok": true})
 	})
-
 	return r
 }

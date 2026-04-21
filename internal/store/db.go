@@ -6,6 +6,7 @@ import (
     "github.com/Dinuka-Nonis/mini-orchestrator/types"
 	"fmt"
 	"time"
+	"log"
 )
 
 type Store struct{ db *sql.DB }
@@ -94,4 +95,60 @@ func (s *Store) ListPodsForNode(nodeID string) ([]types.Pod, error) {
 
 func (s *Store) UpdatePodContainerID(id, containerID string) {
 	s.db.Exec(`UPDATE pods SET container_id=? WHERE id=?`, containerID, id)
+}
+
+func (s *Store) ListPodsByStatus(status types.PodStatus) ([]types.Pod, error) {
+	rows, err := s.db.Query(
+		`SELECT id,image,cpu,memory,node_id,container_id,status,created_at
+		 FROM pods WHERE status=?`, status)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var pods []types.Pod
+	for rows.Next() {
+		var p types.Pod
+		rows.Scan(&p.ID, &p.Image, &p.CPU, &p.Memory,
+			&p.NodeID, &p.ContainerID, &p.Status, &p.CreatedAt)
+		pods = append(pods, p)
+	}
+	return pods, nil
+}
+
+func (s *Store) ListReadyNodes() ([]*types.Node, error) {
+	rows, err := s.db.Query(
+		`SELECT id,addr,total_cpu,total_mem,used_cpu,used_mem,last_seen,status
+		 FROM nodes WHERE status='ready'`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var nodes []*types.Node
+	for rows.Next() {
+		var n types.Node
+		rows.Scan(&n.ID, &n.Addr, &n.TotalCPU, &n.TotalMem,
+			&n.UsedCPU, &n.UsedMem, &n.LastSeen, &n.Status)
+		nodes = append(nodes, &n)
+	}
+	return nodes, nil
+}
+
+func (s *Store) AssignPod(podID, nodeID string) error {
+	_, err := s.db.Exec(
+		`UPDATE pods SET node_id=?, status='scheduled' WHERE id=? AND status='pending'`,
+		nodeID, podID)
+	return err
+}
+
+func (s *Store) UpdatePodRunning(id, containerID string) error {
+	log.Printf("[store] UpdatePodRunning id=%q containerID=%q", id, containerID)
+	result, err := s.db.Exec(
+		`UPDATE pods SET status='running', container_id=? WHERE id=?`,
+		containerID, id)
+	if err != nil {
+		return err
+	}
+	rows, _ := result.RowsAffected()
+	log.Printf("[store] UpdatePodRunning rows affected: %d", rows)
+	return nil
 }
