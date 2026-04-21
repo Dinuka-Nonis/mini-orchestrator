@@ -78,7 +78,7 @@ func (s *Store) TouchNode(id string) {
 func (s *Store) ListPodsForNode(nodeID string) ([]types.Pod, error) {
 	rows, err := s.db.Query(
 		`SELECT id,image,cpu,memory,node_id,container_id,status,created_at
-		 FROM pods WHERE node_id=? AND status NOT IN ('stopped')`, nodeID)
+		 FROM pods WHERE node_id=? AND status NOT IN ('stopped','pending')`, nodeID)
 	if err != nil {
 		return nil, err
 	}
@@ -86,8 +86,8 @@ func (s *Store) ListPodsForNode(nodeID string) ([]types.Pod, error) {
 	var pods []types.Pod
 	for rows.Next() {
 		var p types.Pod
-		rows.Scan(&p.ID, &p.Image, &p.CPU, &p.Memory, &p.NodeID,
-			&p.ContainerID, &p.Status, &p.CreatedAt)
+		rows.Scan(&p.ID, &p.Image, &p.CPU, &p.Memory,
+			&p.NodeID, &p.ContainerID, &p.Status, &p.CreatedAt)
 		pods = append(pods, p)
 	}
 	return pods, nil
@@ -151,4 +151,33 @@ func (s *Store) UpdatePodRunning(id, containerID string) error {
 	rows, _ := result.RowsAffected()
 	log.Printf("[store] UpdatePodRunning rows affected: %d", rows)
 	return nil
+}
+
+func (s *Store) ListNodes() ([]types.Node, error) {
+	rows, err := s.db.Query(
+		`SELECT id,addr,total_cpu,total_mem,used_cpu,used_mem,last_seen,status
+		 FROM nodes`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var nodes []types.Node
+	for rows.Next() {
+		var n types.Node
+		rows.Scan(&n.ID, &n.Addr, &n.TotalCPU, &n.TotalMem,
+			&n.UsedCPU, &n.UsedMem, &n.LastSeen, &n.Status)
+		nodes = append(nodes, n)
+	}
+	return nodes, nil
+}
+
+func (s *Store) UpdateNodeStatus(id, status string) error {
+	_, err := s.db.Exec(`UPDATE nodes SET status=? WHERE id=?`, status, id)
+	return err
+}
+
+func (s *Store) ResetPod(id string) error {
+	_, err := s.db.Exec(
+		`UPDATE pods SET status='pending', node_id='', container_id='' WHERE id=?`, id)
+	return err
 }
