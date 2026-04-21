@@ -79,5 +79,14 @@ func New(s *store.Store) *gin.Engine {
 		}
 		c.JSON(200, gin.H{"ok": true})
 	})
+
+	r.GET("/nodes", func(c *gin.Context) {
+		nodes, err := s.ListNodes()
+		if err != nil {
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(200, nodes)
+	})
 	return r
 }

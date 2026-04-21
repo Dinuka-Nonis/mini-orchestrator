@@ -36,13 +36,11 @@ func (s *Scheduler) schedulePending() {
 	if err != nil || len(pods) == 0 {
 		return
 	}
-
 	nodes, err := s.store.ListReadyNodes()
 	if err != nil || len(nodes) == 0 {
 		log.Printf("[scheduler] no ready nodes available")
 		return
 	}
-
 	for _, pod := range pods {
 		node := s.bestFit(pod, nodes)
 		if node == nil {
@@ -54,7 +52,7 @@ func (s *Scheduler) schedulePending() {
 			log.Printf("[scheduler] assign failed: %v", err)
 			continue
 		}
-		// update local copy so next pod sees updated usage
+		s.store.UpdateNodeUsage(node.ID, pod.CPU, pod.Memory)
 		node.UsedCPU += pod.CPU
 		node.UsedMem += pod.Memory
 		log.Printf("[scheduler] assigned pod %s → node %s", pod.ID[:8], node.ID)

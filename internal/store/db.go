@@ -177,7 +177,29 @@ func (s *Store) UpdateNodeStatus(id, status string) error {
 }
 
 func (s *Store) ResetPod(id string) error {
+	// first get the pod so we know how much resource to free
+	var cpu, mem int
+	var nodeID string
+	s.db.QueryRow(`SELECT cpu, memory, node_id FROM pods WHERE id=?`, id).
+		Scan(&cpu, &mem, &nodeID)
+
 	_, err := s.db.Exec(
 		`UPDATE pods SET status='pending', node_id='', container_id='' WHERE id=?`, id)
+	if err != nil {
+		return err
+	}
+	// free the resources on the node
+	if nodeID != "" {
+		s.db.Exec(
+			`UPDATE nodes SET used_cpu=MAX(0,used_cpu-?), used_mem=MAX(0,used_mem-?) WHERE id=?`,
+			cpu, mem, nodeID)
+	}
+	return nil
+}
+
+func (s *Store) UpdateNodeUsage(nodeID string, cpuDelta, memDelta int) error {
+	_, err := s.db.Exec(
+		`UPDATE nodes SET used_cpu=used_cpu+?, used_mem=used_mem+? WHERE id=?`,
+		cpuDelta, memDelta, nodeID)
 	return err
 }
