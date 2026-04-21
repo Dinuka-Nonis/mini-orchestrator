@@ -46,5 +46,38 @@ func New(s *store.Store) *gin.Engine {
 		c.JSON(http.StatusOK, gin.H{"ok": true})
 	})
 
+	r.POST("/nodes/register", func(c *gin.Context) {
+    var node types.Node
+    if err := c.BindJSON(&node); err != nil {
+        c.JSON(400, gin.H{"error": err.Error()}); return
+    }
+    node.LastSeen = time.Now()
+    s.UpsertNode(&node)
+    c.JSON(200, gin.H{"ok": true})
+	})
+
+	r.POST("/nodes/:id/heartbeat", func(c *gin.Context) {
+		s.TouchNode(c.Param("id"))
+		c.JSON(200, gin.H{"ok": true})
+	})
+
+	r.GET("/nodes/:id/pods", func(c *gin.Context) {
+		pods, _ := s.ListPodsForNode(c.Param("id"))
+		c.JSON(200, pods)
+	})
+
+	r.PATCH("/pods/:id/status", func(c *gin.Context) {
+		var body struct {
+			Status      types.PodStatus `json:"status"`
+			ContainerID string          `json:"container_id"`
+		}
+		c.BindJSON(&body)
+		s.UpdatePodStatus(c.Param("id"), body.Status)
+		if body.ContainerID != "" {
+			s.UpdatePodContainerID(c.Param("id"), body.ContainerID)
+		}
+		c.JSON(200, gin.H{"ok": true})
+	})
+
 	return r
 }

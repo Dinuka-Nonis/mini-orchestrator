@@ -5,6 +5,7 @@ import (
     _ "github.com/mattn/go-sqlite3"
     "github.com/Dinuka-Nonis/mini-orchestrator/types"
 	"fmt"
+	"time"
 )
 
 type Store struct{ db *sql.DB }
@@ -57,4 +58,40 @@ func (s *Store) UpdatePodStatus(id string, status types.PodStatus) error {
 		return fmt.Errorf("pod not found")
 	}
 	return nil
+}
+
+func (s *Store) UpsertNode(n *types.Node) error {
+	_, err := s.db.Exec(`
+		INSERT INTO nodes (id,addr,total_cpu,total_mem,status,last_seen)
+		VALUES (?,?,?,?,?,?)
+		ON CONFLICT(id) DO UPDATE SET
+			addr=excluded.addr, status=excluded.status, last_seen=excluded.last_seen`,
+		n.ID, n.Addr, n.TotalCPU, n.TotalMem, n.Status, time.Now())
+	return err
+}
+
+func (s *Store) TouchNode(id string) {
+	s.db.Exec(`UPDATE nodes SET last_seen=? WHERE id=?`, time.Now(), id)
+}
+
+func (s *Store) ListPodsForNode(nodeID string) ([]types.Pod, error) {
+	rows, err := s.db.Query(
+		`SELECT id,image,cpu,memory,node_id,container_id,status,created_at
+		 FROM pods WHERE node_id=? AND status NOT IN ('stopped')`, nodeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var pods []types.Pod
+	for rows.Next() {
+		var p types.Pod
+		rows.Scan(&p.ID, &p.Image, &p.CPU, &p.Memory, &p.NodeID,
+			&p.ContainerID, &p.Status, &p.CreatedAt)
+		pods = append(pods, p)
+	}
+	return pods, nil
+}
+
+func (s *Store) UpdatePodContainerID(id, containerID string) {
+	s.db.Exec(`UPDATE pods SET container_id=? WHERE id=?`, containerID, id)
 }
