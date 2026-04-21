@@ -4,6 +4,7 @@ import (
     "database/sql"
     _ "github.com/mattn/go-sqlite3"
     "github.com/Dinuka-Nonis/mini-orchestrator/types"
+	"fmt"
 )
 
 type Store struct{ db *sql.DB }
@@ -44,4 +45,16 @@ func (s *Store) ListPods() ([]types.Pod, error) {
         pods = append(pods, p)
     }
     return pods, nil
+}
+
+func (s *Store) UpdatePodStatus(id string, status types.PodStatus) error {
+	res, err := s.db.Exec(`UPDATE pods SET status=? WHERE id=?`, status, id)
+	if err != nil {
+		return err
+	}
+	rows, _ := res.RowsAffected()
+	if rows == 0 {
+		return fmt.Errorf("pod not found")
+	}
+	return nil
 }
